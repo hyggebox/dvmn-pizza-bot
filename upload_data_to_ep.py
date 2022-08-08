@@ -76,18 +76,6 @@ def add_img(token, img_url):
     return response.json()["data"]["id"]
 
 
-def upload_img(token):
-    ''' Returns image id '''
-    endpoint = "https://api.moltin.com/v2/files"
-    headers = {
-        "Authorization": f"Bearer {token}"
-    }
-    with open("piz.jpg", "rb") as img:
-        response = requests.post(endpoint, headers=headers, files={"file": img})
-        response.raise_for_status()
-    return response.json()["data"]["id"]
-
-
 def relate_img_product(token, product_id, img_id):
     endpoint = f"https://api.moltin.com/pcm/products/{product_id}/relationships/main_image"
     headers = {"Authorization": f"Bearer {token}"}
