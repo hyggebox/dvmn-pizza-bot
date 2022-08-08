@@ -1,5 +1,7 @@
 /images
 resp.json
+menu.json
+addresses.json
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
