@@ -14,7 +14,7 @@ from telegram.ext import (CallbackContext,
                           MessageHandler,
                           Updater)
 
-from bot_helpers import download_photo, get_main_menu_markup, show_cart
+from bot_helpers import download_photo, get_main_menu_markup, show_cart, fetch_coordinates
 from moltin_handlers import (generate_moltin_token,
                              get_product_data,
                              add_product_to_cart,
@@ -44,6 +44,7 @@ class State(Enum):
     HANDLE_DESCRIPTION = auto()
     HANDLE_CART = auto()
     WAITING_EMAIL = auto()
+    WAITING_LOCATION = auto()
 
 
 def start(update: Update, context: CallbackContext):
@@ -141,8 +142,9 @@ def handle_cart(update: Update, context: CallbackContext):
 
     elif user_query['data'] == 'check_out':
         context.bot.send_message(chat_id=user_query.message.chat_id,
-                                 text='Пришлите, пожалуйста, ваш email')
-        return State.WAITING_EMAIL
+                                 text='Укажите адрес или координаты')
+        return State.WAITING_LOCATION
+        # return State.WAITING_EMAIL
 
     delete_product_from_cart(token=moltin_token,
                              cart_id=update.effective_user.id,
@@ -160,6 +162,36 @@ def handle_user_details(update: Update, context: CallbackContext):
                     customer_id=update.effective_user.id,
                     name=update.effective_user.first_name,
                     email=users_email)
+
+
+def handle_location(update: Update, context: CallbackContext):
+    if update.edited_message:
+        if update.edited_message.location:
+            users_location = update.edited_message.location
+            current_pos = (str(users_location.latitude),
+                           str(users_location.longitude))
+        else:
+            current_pos = None
+    elif update.message:
+        if update.message.location:
+            users_location = update.message.location
+            current_pos = (str(users_location.latitude),
+                           str(users_location.longitude))
+        elif update.message.text:
+            users_address = update.message.text
+            current_pos = fetch_coordinates(
+                context.bot_data['yandex_api_key'],
+                users_address)
+        else:
+            current_pos = None
+
+    if not current_pos:
+        update.message.reply_text(
+            "К сожалению, не могу найти координаты. "
+            "Уточните месторасположение"
+        )
+    else:
+        update.message.reply_text(str(current_pos))
 
 
 def finish(update: Update, context: CallbackContext):
@@ -187,6 +219,7 @@ def main():
     moltin_client_id = env.str('MOLTIN_CLIENT_ID')
     moltin_secret_key = env.str('MOLTIN_SECRET_KEY')
     tg_admin_chat_id = env.str('TG_ADMIN_CHAT_ID')
+    yandex_api_key = env.str('YANDEX_API_KEY')
 
     bot = Bot(token=tg_bot_token)
     logger.setLevel(level=logging.INFO)
@@ -219,12 +252,17 @@ def main():
                     Filters.regex(r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b'),
                     handle_user_details
                 )
-            ]
+            ],
+            State.WAITING_LOCATION: [
+                MessageHandler(Filters.location, handle_location),
+                MessageHandler(Filters.text, handle_location)
+            ],
         },
         fallbacks=[CommandHandler('finish', finish)]
     )
     dispatcher.bot_data['moltin_client_id'] = moltin_client_id
     dispatcher.bot_data['moltin_secret_key'] = moltin_secret_key
+    dispatcher.bot_data['yandex_api_key'] = yandex_api_key
 
     moltin_token, exp_period = generate_moltin_token(moltin_client_id, moltin_secret_key)
     dispatcher.bot_data['moltin_token'] = moltin_token
