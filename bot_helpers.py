@@ -2,6 +2,7 @@ import os
 import pathlib
 from urllib.parse import urlsplit, unquote
 
+from geopy import distance
 import requests
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 
@@ -81,3 +82,33 @@ def fetch_coordinates(apikey, address):
     most_relevant = found_places[0]
     lon, lat = most_relevant["GeoObject"]["Point"]["pos"].split(" ")
     return lat, lon
+
+
+def get_distance(from_coors, to_coors):
+    distance_in_km = distance.distance(from_coors, to_coors).km
+    return round(distance_in_km, 2)
+
+
+def get_pizzerias_details(token):
+    flow_slug = "pizzeria"
+    endpoint = f"https://api.moltin.com/v2/flows/{flow_slug}/entries"
+    headers = {"Authorization": f"Bearer {token}"}
+    response = requests.get(endpoint, headers=headers)
+    response.raise_for_status()
+    return response.json()["data"]
+
+
+def get_distances(distances):
+    return distances["distance_to_user"]
+
+
+def get_nearest_pizzeria(token, users_coors):
+    all_pizzerias = get_pizzerias_details(token)
+    distances_to_user = []
+    for pizzeria in all_pizzerias:
+        pizzeria_coors = (pizzeria["lat"], pizzeria["lon"])
+        pizzeria_data = {"address": pizzeria["address"],
+                         "alias": pizzeria["alias"],
+                         "distance_to_user": get_distance(pizzeria_coors, users_coors)}
+        distances_to_user.append(pizzeria_data)
+    return min(distances_to_user, key=get_distances)

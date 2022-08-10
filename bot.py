@@ -14,7 +14,7 @@ from telegram.ext import (CallbackContext,
                           MessageHandler,
                           Updater)
 
-from bot_helpers import download_photo, get_main_menu_markup, show_cart, fetch_coordinates
+from bot_helpers import download_photo, get_main_menu_markup, show_cart, fetch_coordinates, get_distance, get_nearest_pizzeria
 from moltin_handlers import (generate_moltin_token,
                              get_product_data,
                              add_product_to_cart,
@@ -165,18 +165,19 @@ def handle_user_details(update: Update, context: CallbackContext):
 
 
 def handle_location(update: Update, context: CallbackContext):
+    moltin_token = context.bot_data['moltin_token']
     if update.edited_message:
         if update.edited_message.location:
             users_location = update.edited_message.location
-            current_pos = (str(users_location.latitude),
-                           str(users_location.longitude))
+            current_pos = (users_location.latitude,
+                           users_location.longitude)
         else:
             current_pos = None
     elif update.message:
         if update.message.location:
             users_location = update.message.location
-            current_pos = (str(users_location.latitude),
-                           str(users_location.longitude))
+            current_pos = (users_location.latitude,
+                           users_location.longitude)
         elif update.message.text:
             users_address = update.message.text
             current_pos = fetch_coordinates(
@@ -191,11 +192,30 @@ def handle_location(update: Update, context: CallbackContext):
             "Уточните месторасположение"
         )
     else:
-        update.message.reply_text(str(current_pos))
+        nearest_pizzeria = get_nearest_pizzeria(moltin_token, current_pos)
+        distance_to_nearest_pizzeria = nearest_pizzeria['distance_to_user']
+        if distance_to_nearest_pizzeria <= 0.5:
+            update.message.reply_text(f"Может, заберёте пиццу из нашей пиццерии "
+                                      f"неподалёку? Она всего в "
+                                      f"{int(distance_to_nearest_pizzeria * 100)} м от вас! "
+                                      f"Вот её адрес: {nearest_pizzeria['address']}.\n\n"
+                                      f"А можем и бесплатно доставить, нас не сложно с:")
+        elif distance_to_nearest_pizzeria <= 5:
+            update.message.reply_text(f"Адрес ближайшей пиццерии: {nearest_pizzeria['address']}.\n\n"
+                                      f"Похоже, придётся ехать до вас на самокате."
+                                      f"Доставка будет стоить 100 руб. Доставка"
+                                      f"или самовывоз?")
+        elif distance_to_nearest_pizzeria <= 20:
+            update.message.reply_text(f"Доставка пиццы до вас будет стоить 300 руб. "
+                                      f"Оформляем заказ?")
+        else:
+            update.message.reply_text(f"Простите, но так далеко мы пиццу не доставим."
+                                      f"Ближайшая пиццерия аж в {round(distance_to_nearest_pizzeria)} "
+                                      f"км от вас!")
 
 
 def finish(update: Update, context: CallbackContext):
-    update.message.reply_text('Будем рады видеть вас снова 😊')
+    update.message.reply_text("Будем рады видеть вас снова 😊")
     return ConversationHandler.END
 
 
