@@ -108,7 +108,7 @@ def get_nearest_pizzeria(token, users_coors):
     for pizzeria in all_pizzerias:
         pizzeria_coors = (pizzeria["lat"], pizzeria["lon"])
         pizzeria_data = {"address": pizzeria["address"],
-                         "alias": pizzeria["alias"],
+                         "carrier_id": pizzeria["carrier-id"],
                          "distance_to_user": get_distance(pizzeria_coors, users_coors)}
         distances_to_user.append(pizzeria_data)
     return min(distances_to_user, key=get_distances)

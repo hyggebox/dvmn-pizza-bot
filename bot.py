@@ -21,6 +21,7 @@ from moltin_handlers import (generate_moltin_token,
                              delete_product_from_cart,
                              create_customer,
                              find_product_price)
+from upload_data_to_ep import create_entry
 
 
 logger = logging.getLogger('TGBotLogger')
@@ -45,7 +46,7 @@ class State(Enum):
     HANDLE_CART = auto()
     WAITING_EMAIL = auto()
     WAITING_LOCATION = auto()
-
+    HANDLE_DELIVERY_METHOD = auto()
 
 def start(update: Update, context: CallbackContext):
     user = update.effective_user
@@ -192,26 +193,70 @@ def handle_location(update: Update, context: CallbackContext):
             "Уточните месторасположение"
         )
     else:
+        reply_markup = InlineKeyboardMarkup(
+            [
+                [InlineKeyboardButton("Доставка", callback_data="delivery")],
+                [InlineKeyboardButton("Самовывоз", callback_data="self_pickup")],
+                [InlineKeyboardButton("🛒 КОРЗИНА", callback_data="cart")]
+            ]
+        )
+
         nearest_pizzeria = get_nearest_pizzeria(moltin_token, current_pos)
         distance_to_nearest_pizzeria = nearest_pizzeria['distance_to_user']
+        context.user_data['nearest_pizzeria'] = nearest_pizzeria
+        context.user_data['customer_coors'] = current_pos
         if distance_to_nearest_pizzeria <= 0.5:
-            update.message.reply_text(f"Может, заберёте пиццу из нашей пиццерии "
+            update.message.reply_text(text=f"Может, заберёте пиццу из нашей пиццерии "
                                       f"неподалёку? Она всего в "
                                       f"{int(distance_to_nearest_pizzeria * 100)} м от вас! "
                                       f"Вот её адрес: {nearest_pizzeria['address']}.\n\n"
-                                      f"А можем и бесплатно доставить, нас не сложно с:")
+                                      f"А можем и бесплатно доставить, нас не сложно с:",
+                                      reply_markup=reply_markup)
         elif distance_to_nearest_pizzeria <= 5:
-            update.message.reply_text(f"Адрес ближайшей пиццерии: {nearest_pizzeria['address']}.\n\n"
+            update.message.reply_text(text=f"Адрес ближайшей пиццерии: {nearest_pizzeria['address']}.\n\n"
                                       f"Похоже, придётся ехать до вас на самокате."
                                       f"Доставка будет стоить 100 руб. Доставка"
-                                      f"или самовывоз?")
+                                      f"или самовывоз?",
+                                      reply_markup=reply_markup)
         elif distance_to_nearest_pizzeria <= 20:
-            update.message.reply_text(f"Доставка пиццы до вас будет стоить 300 руб. "
-                                      f"Оформляем заказ?")
+            update.message.reply_text(text=f"Доставка пиццы до вас будет стоить 300 руб. "
+                                      f"Оформляем заказ?",
+                                      reply_markup=reply_markup)
         else:
             update.message.reply_text(f"Простите, но так далеко мы пиццу не доставим."
                                       f"Ближайшая пиццерия аж в {round(distance_to_nearest_pizzeria)} "
                                       f"км от вас!")
+        return State.HANDLE_DELIVERY_METHOD
+
+
+def handle_delivery_method(update: Update, context: CallbackContext):
+    user_query = update.callback_query
+    moltin_token = context.bot_data['moltin_token']
+    nearest_pizzeria = context.user_data['nearest_pizzeria']
+
+    if user_query['data'] == 'delivery':
+        context.bot.send_message(chat_id=user_query.message.chat_id,
+                                 text="Мы уже везём вам пиццу!")
+
+        users_lat = context.user_data['customer_coors'][0]
+        users_lon = context.user_data['customer_coors'][1]
+        create_entry(
+            moltin_token,
+            "customer-address",
+            [("customer-id", user_query.message.chat_id),
+             ("lat", users_lat),
+             ("lon", users_lon)]
+        )
+        carrier_id = int(nearest_pizzeria["carrier_id"])
+        context.bot.send_location(chat_id=carrier_id,
+                                  latitude=users_lat,
+                                  longitude=users_lon)
+
+    if user_query['data'] == 'self_pickup':
+        context.bot.send_message(chat_id=user_query.message.chat_id,
+                                 text=f"Заберите свою пиццу по адресу: "
+                                  f"{nearest_pizzeria['address']}")
+        return ConversationHandler.END
 
 
 def finish(update: Update, context: CallbackContext):
@@ -277,6 +322,9 @@ def main():
                 MessageHandler(Filters.location, handle_location),
                 MessageHandler(Filters.text, handle_location)
             ],
+            State.HANDLE_DELIVERY_METHOD: [
+                CallbackQueryHandler(handle_delivery_method)
+            ]
         },
         fallbacks=[CommandHandler('finish', finish)]
     )
