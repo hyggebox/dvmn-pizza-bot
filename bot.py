@@ -14,7 +14,12 @@ from telegram.ext import (CallbackContext,
                           MessageHandler,
                           Updater)
 
-from bot_helpers import download_photo, get_main_menu_markup, show_cart, fetch_coordinates, get_distance, get_nearest_pizzeria
+from bot_helpers import (download_photo,
+                         get_main_menu_markup,
+                         show_cart,
+                         fetch_coordinates,
+                         get_nearest_pizzeria,
+                         send_message_after_delivery_time)
 from moltin_handlers import (generate_moltin_token,
                              get_product_data,
                              add_product_to_cart,
@@ -251,6 +256,11 @@ def handle_delivery_method(update: Update, context: CallbackContext):
         context.bot.send_location(chat_id=carrier_id,
                                   latitude=users_lat,
                                   longitude=users_lon)
+
+        delivery_time_in_sec = 360
+        context.job_queue.run_once(send_message_after_delivery_time,
+                                   delivery_time_in_sec,
+                                   context=user_query.message.chat_id)
 
     if user_query['data'] == 'self_pickup':
         context.bot.send_message(chat_id=user_query.message.chat_id,

@@ -112,3 +112,9 @@ def get_nearest_pizzeria(token, users_coors):
                          "distance_to_user": get_distance(pizzeria_coors, users_coors)}
         distances_to_user.append(pizzeria_data)
     return min(distances_to_user, key=get_distances)
+
+
+def send_message_after_delivery_time(context):
+    context.bot.send_message(context.job.context,
+                             text="Приятного аппетита!\n\n"
+                                  "*сообщение что делать если пицца не пришла*")
