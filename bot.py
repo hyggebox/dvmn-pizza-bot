@@ -29,7 +29,7 @@ from moltin_handlers import (generate_moltin_token,
 from upload_data_to_ep import create_entry
 
 
-logger = logging.getLogger('TGBotLogger')
+logger = logging.getLogger("TGBotLogger")
 
 
 class TelegramLogsHandler(logging.Handler):
@@ -69,45 +69,45 @@ def show_menu(update: Update, context: CallbackContext):
                                message_id=user_query.message.message_id)
     context.bot.send_message(
         chat_id=user_query.message.chat_id,
-        text='Пожалуйста, выберите товар:',
-        reply_markup=get_main_menu_markup(context.bot_data['moltin_token'])
+        text="Пожалуйста, выберите товар:",
+        reply_markup=get_main_menu_markup(context.bot_data["moltin_token"])
     )
     return State.HANDLE_MENU
 
 
 def handle_menu(update: Update, context: CallbackContext):
     user_query = update.callback_query
-    moltin_token = context.bot_data['moltin_token']
+    moltin_token = context.bot_data["moltin_token"]
 
-    if user_query['data'] == 'cart':
+    if user_query["data"] == "cart":
         show_cart(update, context, moltin_token)
         return State.HANDLE_CART
 
-    context.user_data['product_id'] = user_query.data
+    context.user_data["product_id"] = user_query.data
     context.bot.delete_message(chat_id=user_query.message.chat_id,
                                message_id=user_query.message.message_id)
 
     product_data = get_product_data(moltin_token, user_query)
-    product_img_id = product_data['relationships']['main_image']['data']['id']
+    product_img_id = product_data["relationships"]["main_image"]["data"]["id"]
     download_photo(moltin_token, product_img_id)
 
-    for filename in os.listdir('images'):
+    for filename in os.listdir("images"):
         if product_img_id != os.path.splitext(filename)[0]:
             continue
-        with open(f'images/{filename}', 'rb') as image:
+        with open(f"images/{filename}", "rb") as image:
             reply_markup = InlineKeyboardMarkup(
                 [
-                    [InlineKeyboardButton('Добавить в корзину', callback_data=user_query.data)],
-                    [InlineKeyboardButton('🛒 КОРЗИНА', callback_data='cart')],
-                    [InlineKeyboardButton('Назад', callback_data='back')]
+                    [InlineKeyboardButton("Добавить в корзину", callback_data=user_query.data)],
+                    [InlineKeyboardButton("🛒 КОРЗИНА", callback_data="cart")],
+                    [InlineKeyboardButton("Назад", callback_data="back")]
                 ]
             )
 
-            product_attrs = product_data['attributes']
+            product_attrs = product_data["attributes"]
             product_price = find_product_price(moltin_token, product_attrs["sku"])
-            caption_text = f'«{product_attrs["name"]}»\n\n' \
-                           f'Цена: {product_price} руб.\n\n' \
-                           f'{product_attrs["description"]}'[:1024]
+            caption_text = f"«{product_attrs['name']}»\n\n" \
+                           f"Цена: {product_price} руб.\n\n" \
+                           f"{product_attrs['description']}"[:1024]
 
             context.bot.send_photo(chat_id=user_query.message.chat_id,
                                    photo=image,
@@ -118,44 +118,44 @@ def handle_menu(update: Update, context: CallbackContext):
 
 def handle_description(update: Update, context: CallbackContext):
     user_query = update.callback_query
-    moltin_token = context.bot_data['moltin_token']
+    moltin_token = context.bot_data["moltin_token"]
 
-    if user_query['data'] == 'back':
+    if user_query["data"] == "back":
         return State.SHOW_MENU
-    if user_query['data'] == 'cart':
+    if user_query["data"] == "cart":
         show_cart(update, context, moltin_token)
         return State.HANDLE_CART
 
     cart_response = add_product_to_cart(token=moltin_token,
                                         cart_id=update.effective_user.id,
-                                        product_id=user_query['data'])
-    if 'errors' in cart_response:
+                                        product_id=user_query["data"])
+    if "errors" in cart_response:
         update.callback_query.answer(
-            text='Произошла ошибка. Попробуйте снова'
+            text="Произошла ошибка. Попробуйте снова"
         )
         return State.HANDLE_DESCRIPTION
     update.callback_query.answer(
-        text=f'Пицца добавлена в корзину',
+        text=f"Пицца добавлена в корзину",
         show_alert=True
     )
 
 
 def handle_cart(update: Update, context: CallbackContext):
     user_query = update.callback_query
-    moltin_token = context.bot_data['moltin_token']
+    moltin_token = context.bot_data["moltin_token"]
 
-    if user_query['data'] == 'get_menu':
+    if user_query["data"] == "get_menu":
         return State.SHOW_MENU
 
-    elif user_query['data'] == 'check_out':
+    elif user_query["data"] == "check_out":
         context.bot.send_message(chat_id=user_query.message.chat_id,
-                                 text='Укажите адрес или координаты')
+                                 text="Укажите адрес или координаты")
         return State.WAITING_LOCATION
         # return State.WAITING_EMAIL
 
     delete_product_from_cart(token=moltin_token,
                              cart_id=update.effective_user.id,
-                             product_id=user_query['data'])
+                             product_id=user_query["data"])
     show_cart(update, context, moltin_token)
     return State.HANDLE_CART
 
@@ -163,16 +163,16 @@ def handle_cart(update: Update, context: CallbackContext):
 def handle_user_details(update: Update, context: CallbackContext):
     users_email = update.message.text
     update.message.reply_text(
-        f'Благодарим за заказ! Мы свяжемся с вами по email {users_email}'
+        f"Благодарим за заказ! Мы свяжемся с вами по email {users_email}"
     )
-    create_customer(token=context.bot_data['moltin_token'],
+    create_customer(token=context.bot_data["moltin_token"],
                     customer_id=update.effective_user.id,
                     name=update.effective_user.first_name,
                     email=users_email)
 
 
 def handle_location(update: Update, context: CallbackContext):
-    moltin_token = context.bot_data['moltin_token']
+    moltin_token = context.bot_data["moltin_token"]
     if update.edited_message:
         if update.edited_message.location:
             users_location = update.edited_message.location
@@ -188,7 +188,7 @@ def handle_location(update: Update, context: CallbackContext):
         elif update.message.text:
             users_address = update.message.text
             current_pos = fetch_coordinates(
-                context.bot_data['yandex_api_key'],
+                context.bot_data["yandex_api_key"],
                 users_address)
         else:
             current_pos = None
@@ -207,9 +207,9 @@ def handle_location(update: Update, context: CallbackContext):
         )
 
         nearest_pizzeria = get_nearest_pizzeria(moltin_token, current_pos)
-        distance_to_nearest_pizzeria = nearest_pizzeria['distance_to_user']
-        context.user_data['nearest_pizzeria'] = nearest_pizzeria
-        context.user_data['customer_coors'] = current_pos
+        distance_to_nearest_pizzeria = nearest_pizzeria["distance_to_user"]
+        context.user_data["nearest_pizzeria"] = nearest_pizzeria
+        context.user_data["customer_coors"] = current_pos
         if distance_to_nearest_pizzeria <= 0.5:
             update.message.reply_text(text=f"Может, заберёте пиццу из нашей пиццерии "
                                       f"неподалёку? Она всего в "
@@ -227,8 +227,8 @@ def handle_location(update: Update, context: CallbackContext):
             context.user_data["delivery_price"] = delivery_price
         elif distance_to_nearest_pizzeria <= 20:
             delivery_price = 300
-            update.message.reply_text(text=f"Доставка пиццы до вас будет стоить {delivery_price} руб. "
-                                      f"Оформляем заказ?",
+            update.message.reply_text(text=f"Доставка пиццы до вас будет стоить "
+                                           f"{delivery_price} руб. Оформляем заказ?",
                                       reply_markup=reply_markup)
             context.user_data["delivery_price"] = delivery_price
         else:
@@ -241,7 +241,7 @@ def handle_location(update: Update, context: CallbackContext):
 def handle_delivery_method(update: Update, context: CallbackContext):
     user_query = update.callback_query
 
-    nearest_pizzeria = context.user_data['nearest_pizzeria']
+    nearest_pizzeria = context.user_data["nearest_pizzeria"]
 
     if user_query["data"] == "delivery":
         sum_in_rub = context.user_data["total"] + context.user_data["delivery_price"]
@@ -322,10 +322,10 @@ def finish(update: Update, context: CallbackContext):
 
 def regenerate_token(context: CallbackContext):
     moltin_token, _ = generate_moltin_token(
-        context.bot_data['moltin_client_id'],
-        context.bot_data['moltin_secret_key']
+        context.bot_data["moltin_client_id"],
+        context.bot_data["moltin_secret_key"]
     )
-    context.bot_data['moltin_token'] = moltin_token
+    context.bot_data["moltin_token"] = moltin_token
 
 
 def main():
@@ -333,34 +333,34 @@ def main():
     env.read_env()
 
     logging.basicConfig(
-        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
         level=logging.INFO)
 
-    tg_bot_token = env.str('TG_BOT_TOKEN')
-    tg_bot_merchant_token = env.str('TB_BOT_MERCHANT_TOKEN')
-    moltin_client_id = env.str('MOLTIN_CLIENT_ID')
-    moltin_secret_key = env.str('MOLTIN_SECRET_KEY')
-    tg_admin_chat_id = env.str('TG_ADMIN_CHAT_ID')
-    yandex_api_key = env.str('YANDEX_API_KEY')
+    tg_bot_token = env.str("TG_BOT_TOKEN")
+    tg_bot_merchant_token = env.str("TB_BOT_MERCHANT_TOKEN")
+    moltin_client_id = env.str("MOLTIN_CLIENT_ID")
+    moltin_secret_key = env.str("MOLTIN_SECRET_KEY")
+    tg_admin_chat_id = env.str("TG_ADMIN_CHAT_ID")
+    yandex_api_key = env.str("YANDEX_API_KEY")
 
     bot = Bot(token=tg_bot_token)
     logger.setLevel(level=logging.INFO)
     logger.addHandler(TelegramLogsHandler(bot, tg_admin_chat_id))
-    logger.info('Бот запущен')
+    logger.info("Бот запущен")
 
-    pathlib.Path('images/').mkdir(exist_ok=True)
+    pathlib.Path("images/").mkdir(exist_ok=True)
 
     updater = Updater(tg_bot_token)
     dispatcher = updater.dispatcher
 
     conv_handler = ConversationHandler(
-        entry_points=[CommandHandler('start', start)],
+        entry_points=[CommandHandler("start", start)],
         states={
             State.SHOW_MENU: [
                 CallbackQueryHandler(show_menu),
             ],
             State.HANDLE_MENU: [
-                CommandHandler('start', start),
+                CommandHandler("start", start),
                 CallbackQueryHandler(handle_menu),
             ],
             State.HANDLE_DESCRIPTION: [
@@ -371,7 +371,7 @@ def main():
             ],
             State.WAITING_EMAIL: [
                 MessageHandler(
-                    Filters.regex(r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b'),
+                    Filters.regex(r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b"),
                     handle_user_details
                 )
             ],
@@ -390,15 +390,15 @@ def main():
                 MessageHandler(Filters.successful_payment, successful_payment_callback)
             ]
         },
-        fallbacks=[CommandHandler('finish', finish)]
+        fallbacks=[CommandHandler("finish", finish)]
     )
-    dispatcher.bot_data['moltin_client_id'] = moltin_client_id
-    dispatcher.bot_data['moltin_secret_key'] = moltin_secret_key
-    dispatcher.bot_data['yandex_api_key'] = yandex_api_key
+    dispatcher.bot_data["moltin_client_id"] = moltin_client_id
+    dispatcher.bot_data["moltin_secret_key"] = moltin_secret_key
+    dispatcher.bot_data["yandex_api_key"] = yandex_api_key
     dispatcher.bot_data["merchant_token"] = tg_bot_merchant_token
 
     moltin_token, exp_period = generate_moltin_token(moltin_client_id, moltin_secret_key)
-    dispatcher.bot_data['moltin_token'] = moltin_token
+    dispatcher.bot_data["moltin_token"] = moltin_token
     updater.job_queue.run_repeating(regenerate_token, interval=exp_period)
 
     dispatcher.add_handler(conv_handler)
@@ -414,5 +414,5 @@ def main():
             sleep(60)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()
