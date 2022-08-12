@@ -5,14 +5,14 @@ from enum import Enum, auto
 from time import sleep
 
 from environs import Env
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, Bot
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, Bot, LabeledPrice, error
 from telegram.ext import (CallbackContext,
                           CallbackQueryHandler,
                           CommandHandler,
                           ConversationHandler,
                           Filters,
                           MessageHandler,
-                          Updater)
+                          Updater, PreCheckoutQueryHandler)
 
 from bot_helpers import (download_photo,
                          get_main_menu_markup,
@@ -52,12 +52,13 @@ class State(Enum):
     WAITING_EMAIL = auto()
     WAITING_LOCATION = auto()
     HANDLE_DELIVERY_METHOD = auto()
+    HANDLE_PAYMENT = auto()
 
 def start(update: Update, context: CallbackContext):
     user = update.effective_user
     update.message.reply_markdown_v2(
-        text=f'Привет, {user.mention_markdown_v2()}\! Хотите заказать пиццу?',
-        reply_markup=get_main_menu_markup(context.bot_data['moltin_token'])
+        text=f"Привет, {user.mention_markdown_v2()}\! Хотите заказать пиццу?",
+        reply_markup=get_main_menu_markup(context.bot_data["moltin_token"])
     )
     return State.HANDLE_MENU
 
@@ -105,8 +106,8 @@ def handle_menu(update: Update, context: CallbackContext):
             product_attrs = product_data['attributes']
             product_price = find_product_price(moltin_token, product_attrs["sku"])
             caption_text = f'«{product_attrs["name"]}»\n\n' \
-                   f'Цена: {product_price} руб.\n\n' \
-                   f'{product_attrs["description"]}'[:1024]
+                           f'Цена: {product_price} руб.\n\n' \
+                           f'{product_attrs["description"]}'[:1024]
 
             context.bot.send_photo(chat_id=user_query.message.chat_id,
                                    photo=image,
@@ -201,8 +202,7 @@ def handle_location(update: Update, context: CallbackContext):
         reply_markup = InlineKeyboardMarkup(
             [
                 [InlineKeyboardButton("Доставка", callback_data="delivery")],
-                [InlineKeyboardButton("Самовывоз", callback_data="self_pickup")],
-                [InlineKeyboardButton("🛒 КОРЗИНА", callback_data="cart")]
+                [InlineKeyboardButton("Самовывоз", callback_data="self_pickup")]
             ]
         )
 
@@ -218,15 +218,19 @@ def handle_location(update: Update, context: CallbackContext):
                                       f"А можем и бесплатно доставить, нас не сложно с:",
                                       reply_markup=reply_markup)
         elif distance_to_nearest_pizzeria <= 5:
+            delivery_price = 100
             update.message.reply_text(text=f"Адрес ближайшей пиццерии: {nearest_pizzeria['address']}.\n\n"
                                       f"Похоже, придётся ехать до вас на самокате."
-                                      f"Доставка будет стоить 100 руб. Доставка"
+                                      f"Доставка будет стоить {delivery_price} руб. Доставка"
                                       f"или самовывоз?",
                                       reply_markup=reply_markup)
+            context.user_data["delivery_price"] = delivery_price
         elif distance_to_nearest_pizzeria <= 20:
-            update.message.reply_text(text=f"Доставка пиццы до вас будет стоить 300 руб. "
+            delivery_price = 300
+            update.message.reply_text(text=f"Доставка пиццы до вас будет стоить {delivery_price} руб. "
                                       f"Оформляем заказ?",
                                       reply_markup=reply_markup)
+            context.user_data["delivery_price"] = delivery_price
         else:
             update.message.reply_text(f"Простите, но так далеко мы пиццу не доставим."
                                       f"Ближайшая пиццерия аж в {round(distance_to_nearest_pizzeria)} "
@@ -236,19 +240,68 @@ def handle_location(update: Update, context: CallbackContext):
 
 def handle_delivery_method(update: Update, context: CallbackContext):
     user_query = update.callback_query
-    moltin_token = context.bot_data['moltin_token']
+
     nearest_pizzeria = context.user_data['nearest_pizzeria']
 
-    if user_query['data'] == 'delivery':
-        context.bot.send_message(chat_id=user_query.message.chat_id,
-                                 text="Мы уже везём вам пиццу!")
+    if user_query["data"] == "delivery":
+        sum_in_rub = context.user_data["total"] + context.user_data["delivery_price"]
+        context.user_data["delivery_method"] = "delivery"
 
-        users_lat = context.user_data['customer_coors'][0]
-        users_lon = context.user_data['customer_coors'][1]
+    elif user_query["data"] == "self_pickup":
+        context.bot.send_message(chat_id=user_query.message.chat_id,
+                                 text=f"Ваша пицца будет готова по адресу: "
+                                      f"{nearest_pizzeria['address']}")
+        sum_in_rub = context.user_data["total"]
+        context.user_data["delivery_method"] = "self_pickup"
+
+    chat_id = update.effective_chat.id
+    title = "Оплата заказа"
+    description = "Оплата заказа #000234"
+    payload = "PizzaPayment"
+    provider_token = context.bot_data["merchant_token"]
+    start_parameter = "test-payment"
+    currency = "RUB"
+
+    prices = [LabeledPrice("Оплата пиццы", sum_in_rub * 100)]
+
+    context.bot.send_invoice(chat_id, title, description,
+                             payload, provider_token,
+                             start_parameter, currency, prices)
+
+    return State.HANDLE_PAYMENT
+
+
+def handle_payment(update: Update, context: CallbackContext):
+    pass
+
+
+def precheckout_callback(update, context):
+    query = update.pre_checkout_query
+    if query.invoice_payload != "PizzaPayment":
+        context.bot.answer_pre_checkout_query(
+            pre_checkout_query_id=query.id,
+            ok=False,
+            error_message="Что-то пошло не так и не туда..."
+        )
+    else:
+        context.bot.answer_pre_checkout_query(
+            pre_checkout_query_id=query.id,
+            ok=True
+        )
+
+
+def successful_payment_callback(update, context):
+    moltin_token = context.bot_data["moltin_token"]
+    nearest_pizzeria = context.user_data["nearest_pizzeria"]
+    update.message.reply_text("Отлично! Мы уже готовим вашу пиццу!")
+
+    if context.user_data["delivery_method"] == "delivery":
+        users_lat = context.user_data["customer_coors"][0]
+        users_lon = context.user_data["customer_coors"][1]
         create_entry(
             moltin_token,
             "customer-address",
-            [("customer-id", user_query.message.chat_id),
+            [("customer-id", update.message.chat.id),
              ("lat", users_lat),
              ("lon", users_lon)]
         )
@@ -256,17 +309,10 @@ def handle_delivery_method(update: Update, context: CallbackContext):
         context.bot.send_location(chat_id=carrier_id,
                                   latitude=users_lat,
                                   longitude=users_lon)
-
         delivery_time_in_sec = 360
         context.job_queue.run_once(send_message_after_delivery_time,
                                    delivery_time_in_sec,
-                                   context=user_query.message.chat_id)
-
-    if user_query['data'] == 'self_pickup':
-        context.bot.send_message(chat_id=user_query.message.chat_id,
-                                 text=f"Заберите свою пиццу по адресу: "
-                                  f"{nearest_pizzeria['address']}")
-        return ConversationHandler.END
+                                   context=update.message.chat.id)
 
 
 def finish(update: Update, context: CallbackContext):
@@ -291,6 +337,7 @@ def main():
         level=logging.INFO)
 
     tg_bot_token = env.str('TG_BOT_TOKEN')
+    tg_bot_merchant_token = env.str('TB_BOT_MERCHANT_TOKEN')
     moltin_client_id = env.str('MOLTIN_CLIENT_ID')
     moltin_secret_key = env.str('MOLTIN_SECRET_KEY')
     tg_admin_chat_id = env.str('TG_ADMIN_CHAT_ID')
@@ -333,7 +380,14 @@ def main():
                 MessageHandler(Filters.text, handle_location)
             ],
             State.HANDLE_DELIVERY_METHOD: [
-                CallbackQueryHandler(handle_delivery_method)
+                CallbackQueryHandler(handle_delivery_method),
+                PreCheckoutQueryHandler(precheckout_callback),
+                MessageHandler(Filters.successful_payment, successful_payment_callback)
+            ],
+            State.HANDLE_PAYMENT: [
+                CallbackQueryHandler(handle_payment),
+                PreCheckoutQueryHandler(precheckout_callback),
+                MessageHandler(Filters.successful_payment, successful_payment_callback)
             ]
         },
         fallbacks=[CommandHandler('finish', finish)]
@@ -341,12 +395,15 @@ def main():
     dispatcher.bot_data['moltin_client_id'] = moltin_client_id
     dispatcher.bot_data['moltin_secret_key'] = moltin_secret_key
     dispatcher.bot_data['yandex_api_key'] = yandex_api_key
+    dispatcher.bot_data["merchant_token"] = tg_bot_merchant_token
 
     moltin_token, exp_period = generate_moltin_token(moltin_client_id, moltin_secret_key)
     dispatcher.bot_data['moltin_token'] = moltin_token
     updater.job_queue.run_repeating(regenerate_token, interval=exp_period)
 
     dispatcher.add_handler(conv_handler)
+    dispatcher.add_handler(PreCheckoutQueryHandler(precheckout_callback))
+    dispatcher.add_handler(MessageHandler(Filters.successful_payment, successful_payment_callback))
 
     while True:
         try:
