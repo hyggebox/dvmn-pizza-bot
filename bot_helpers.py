@@ -61,7 +61,8 @@ def show_cart(update, context, headers):
         )
     text += f'ИТОГО: {total_price}'
     buttons.append([InlineKeyboardButton("📄 В МЕНЮ", callback_data="get_menu")])
-    buttons.append([InlineKeyboardButton("🍕 ОФОРМИТЬ ЗАКАЗ", callback_data="check_out")])
+    buttons.append([InlineKeyboardButton("🍕 ОФОРМИТЬ ЗАКАЗ",
+                                         callback_data="check_out")])
     context.bot.send_message(chat_id=update.effective_user.id,
                              text=text,
                              reply_markup=InlineKeyboardMarkup(buttons))
@@ -111,7 +112,9 @@ def get_nearest_pizzeria(token, users_coors):
         pizzeria_coors = (pizzeria["lat"], pizzeria["lon"])
         pizzeria_data = {"address": pizzeria["address"],
                          "carrier_id": pizzeria["carrier-id"],
-                         "distance_to_user": get_distance(pizzeria_coors, users_coors)}
+                         "distance_to_user": get_distance(pizzeria_coors,
+                                                          users_coors)
+                         }
         distances_to_user.append(pizzeria_data)
     return min(distances_to_user, key=get_distances)
 
@@ -119,4 +122,4 @@ def get_nearest_pizzeria(token, users_coors):
 def send_message_after_delivery_time(context):
     context.bot.send_message(context.job.context,
                              text="Приятного аппетита!\n\n"
-                                  "*сообщение что делать если пицца не пришла*")
+                                  "*что делать если пицца не пришла*")

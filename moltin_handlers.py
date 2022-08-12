@@ -69,21 +69,6 @@ def get_cart_items(token, cart_id):
     return response.json()
 
 
-def create_customer(token, customer_id, name, email):
-    endpoint = "https://api.moltin.com/v2/customers"
-    headers = {"Authorization": f"Bearer {token}"}
-    data = {
-        "data": {
-            "type": "customer",
-            "name": f"{customer_id} -- {name}",
-            "email": email,
-            "password": str(customer_id)
-        }
-    }
-    response = requests.post(endpoint, headers=headers, json=data)
-    response.raise_for_status()
-
-
 def get_prices(token):
     price_book_id = "902947fd-5c0e-4a86-83b1-d347be42426a"
     endpoint = f"https://api.moltin.com/pcm/pricebooks/{price_book_id}/prices"

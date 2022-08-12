@@ -5,7 +5,11 @@ from enum import Enum, auto
 from time import sleep
 
 from environs import Env
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, Bot, LabeledPrice, error
+from telegram import (Update,
+                      InlineKeyboardButton,
+                      InlineKeyboardMarkup,
+                      Bot,
+                      LabeledPrice)
 from telegram.ext import (CallbackContext,
                           CallbackQueryHandler,
                           CommandHandler,
@@ -24,7 +28,6 @@ from moltin_handlers import (generate_moltin_token,
                              get_product_data,
                              add_product_to_cart,
                              delete_product_from_cart,
-                             create_customer,
                              find_product_price)
 from upload_data_to_ep import create_entry
 
@@ -49,7 +52,6 @@ class State(Enum):
     HANDLE_MENU = auto()
     HANDLE_DESCRIPTION = auto()
     HANDLE_CART = auto()
-    WAITING_EMAIL = auto()
     WAITING_LOCATION = auto()
     HANDLE_DELIVERY_METHOD = auto()
     HANDLE_PAYMENT = auto()
@@ -151,24 +153,12 @@ def handle_cart(update: Update, context: CallbackContext):
         context.bot.send_message(chat_id=user_query.message.chat_id,
                                  text="Укажите адрес или координаты")
         return State.WAITING_LOCATION
-        # return State.WAITING_EMAIL
 
     delete_product_from_cart(token=moltin_token,
                              cart_id=update.effective_user.id,
                              product_id=user_query["data"])
     show_cart(update, context, moltin_token)
     return State.HANDLE_CART
-
-
-def handle_user_details(update: Update, context: CallbackContext):
-    users_email = update.message.text
-    update.message.reply_text(
-        f"Благодарим за заказ! Мы свяжемся с вами по email {users_email}"
-    )
-    create_customer(token=context.bot_data["moltin_token"],
-                    customer_id=update.effective_user.id,
-                    name=update.effective_user.first_name,
-                    email=users_email)
 
 
 def handle_location(update: Update, context: CallbackContext):
@@ -211,36 +201,43 @@ def handle_location(update: Update, context: CallbackContext):
         context.user_data["nearest_pizzeria"] = nearest_pizzeria
         context.user_data["customer_coors"] = current_pos
         if distance_to_nearest_pizzeria <= 0.5:
-            update.message.reply_text(text=f"Может, заберёте пиццу из нашей пиццерии "
-                                      f"неподалёку? Она всего в "
-                                      f"{int(distance_to_nearest_pizzeria * 100)} м от вас! "
-                                      f"Вот её адрес: {nearest_pizzeria['address']}.\n\n"
-                                      f"А можем и бесплатно доставить, нас не сложно с:",
-                                      reply_markup=reply_markup)
+            update.message.reply_text(
+                text=f"Может, заберёте пиццу из нашей пиццерии "
+                     f"неподалёку? Она всего в "
+                     f"{int(distance_to_nearest_pizzeria * 100)} м от вас! "
+                     f"Вот её адрес: {nearest_pizzeria['address']}.\n\n "
+                     f"А можем и бесплатно доставить, нас не сложно с:",
+                reply_markup=reply_markup
+            )
         elif distance_to_nearest_pizzeria <= 5:
             delivery_price = 100
-            update.message.reply_text(text=f"Адрес ближайшей пиццерии: {nearest_pizzeria['address']}.\n\n"
-                                      f"Похоже, придётся ехать до вас на самокате."
-                                      f"Доставка будет стоить {delivery_price} руб. Доставка"
-                                      f"или самовывоз?",
-                                      reply_markup=reply_markup)
+            update.message.reply_text(
+                text=f"Адрес ближайшей пиццерии: {nearest_pizzeria['address']}.\n\n"
+                     f"Похоже, придётся ехать до вас на самокате."
+                     f"Доставка будет стоить {delivery_price} руб. "
+                     f"Доставка или самовывоз?",
+                reply_markup=reply_markup
+            )
             context.user_data["delivery_price"] = delivery_price
         elif distance_to_nearest_pizzeria <= 20:
             delivery_price = 300
-            update.message.reply_text(text=f"Доставка пиццы до вас будет стоить "
-                                           f"{delivery_price} руб. Оформляем заказ?",
-                                      reply_markup=reply_markup)
+            update.message.reply_text(
+                text=f"Доставка пиццы до вас будет стоить "
+                     f"{delivery_price} руб. Оформляем заказ?",
+                reply_markup=reply_markup
+            )
             context.user_data["delivery_price"] = delivery_price
         else:
-            update.message.reply_text(f"Простите, но так далеко мы пиццу не доставим."
-                                      f"Ближайшая пиццерия аж в {round(distance_to_nearest_pizzeria)} "
-                                      f"км от вас!")
+            update.message.reply_text(
+                f"Простите, но так далеко мы пиццу не доставим. "
+                f"Ближайшая пиццерия аж в {round(distance_to_nearest_pizzeria)} "
+                f"км от вас!")
+
         return State.HANDLE_DELIVERY_METHOD
 
 
 def handle_delivery_method(update: Update, context: CallbackContext):
     user_query = update.callback_query
-
     nearest_pizzeria = context.user_data["nearest_pizzeria"]
 
     if user_query["data"] == "delivery":
@@ -268,12 +265,6 @@ def handle_delivery_method(update: Update, context: CallbackContext):
                              payload, provider_token,
                              start_parameter, currency, prices)
 
-    return State.HANDLE_PAYMENT
-
-
-def handle_payment(update: Update, context: CallbackContext):
-    pass
-
 
 def precheckout_callback(update, context):
     query = update.pre_checkout_query
@@ -281,7 +272,7 @@ def precheckout_callback(update, context):
         context.bot.answer_pre_checkout_query(
             pre_checkout_query_id=query.id,
             ok=False,
-            error_message="Что-то пошло не так и не туда..."
+            error_message="Что-то пошло не так..."
         )
     else:
         context.bot.answer_pre_checkout_query(
@@ -313,6 +304,7 @@ def successful_payment_callback(update, context):
         context.job_queue.run_once(send_message_after_delivery_time,
                                    delivery_time_in_sec,
                                    context=update.message.chat.id)
+        return ConversationHandler.END
 
 
 def finish(update: Update, context: CallbackContext):
@@ -369,26 +361,14 @@ def main():
             State.HANDLE_CART: [
                 CallbackQueryHandler(handle_cart),
             ],
-            State.WAITING_EMAIL: [
-                MessageHandler(
-                    Filters.regex(r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b"),
-                    handle_user_details
-                )
-            ],
             State.WAITING_LOCATION: [
                 MessageHandler(Filters.location, handle_location),
                 MessageHandler(Filters.text, handle_location)
             ],
             State.HANDLE_DELIVERY_METHOD: [
                 CallbackQueryHandler(handle_delivery_method),
-                PreCheckoutQueryHandler(precheckout_callback),
-                MessageHandler(Filters.successful_payment, successful_payment_callback)
+                CommandHandler("start", start)
             ],
-            State.HANDLE_PAYMENT: [
-                CallbackQueryHandler(handle_payment),
-                PreCheckoutQueryHandler(precheckout_callback),
-                MessageHandler(Filters.successful_payment, successful_payment_callback)
-            ]
         },
         fallbacks=[CommandHandler("finish", finish)]
     )
@@ -397,13 +377,15 @@ def main():
     dispatcher.bot_data["yandex_api_key"] = yandex_api_key
     dispatcher.bot_data["merchant_token"] = tg_bot_merchant_token
 
-    moltin_token, exp_period = generate_moltin_token(moltin_client_id, moltin_secret_key)
+    moltin_token, exp_period = generate_moltin_token(moltin_client_id,
+                                                     moltin_secret_key)
     dispatcher.bot_data["moltin_token"] = moltin_token
     updater.job_queue.run_repeating(regenerate_token, interval=exp_period)
 
     dispatcher.add_handler(conv_handler)
     dispatcher.add_handler(PreCheckoutQueryHandler(precheckout_callback))
-    dispatcher.add_handler(MessageHandler(Filters.successful_payment, successful_payment_callback))
+    dispatcher.add_handler(MessageHandler(Filters.successful_payment,
+                                          successful_payment_callback))
 
     while True:
         try:
