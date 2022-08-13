@@ -347,7 +347,7 @@ def main():
         level=logging.INFO)
 
     tg_bot_token = env.str("TG_BOT_TOKEN")
-    tg_bot_merchant_token = env.str("TB_BOT_MERCHANT_TOKEN")
+    tg_bot_merchant_token = env.str("TG_BOT_MERCHANT_TOKEN")
     moltin_client_id = env.str("MOLTIN_CLIENT_ID")
     moltin_secret_key = env.str("MOLTIN_SECRET_KEY")
     tg_admin_chat_id = env.str("TG_ADMIN_CHAT_ID")
