@@ -3,6 +3,7 @@ import pathlib
 from urllib.parse import urlsplit, unquote
 
 from geopy import distance
+from more_itertools import chunked
 import requests
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 
@@ -34,10 +35,21 @@ def download_photo(token, img_id):
             file.write(img_response.content)
 
 
-def get_main_menu_markup(token):
-    buttons = [[InlineKeyboardButton(product["attributes"]["name"],
+def get_main_menu_markup(token, current_page):
+    all_products = get_all_products(token)
+
+    products_per_page = 5
+    products_groups = list(chunked(all_products, products_per_page))
+    pages_num = len(products_groups)
+    current_page_products = products_groups[current_page]
+    buttons = [[InlineKeyboardButton(f'🍕 {product["attributes"]["name"]}',
                                      callback_data=product["id"])]
-               for product in get_all_products(token)]
+               for product in current_page_products]
+
+    if current_page > 0:
+        buttons.insert(0, [InlineKeyboardButton("<<<", callback_data="previous_page")])
+    if current_page < pages_num-1:
+        buttons.append([InlineKeyboardButton(">>>", callback_data="next_page")])
     buttons.append([InlineKeyboardButton("🛒 КОРЗИНА", callback_data="cart")])
     return InlineKeyboardMarkup(buttons)
 
@@ -59,7 +71,7 @@ def show_cart(update, context, headers):
             [InlineKeyboardButton(f"{item['name']} ✖️",
                                   callback_data=item["id"])]
         )
-    text += f'ИТОГО: {total_price}'
+    text += f"ИТОГО: {total_price} руб."
     buttons.append([InlineKeyboardButton("📄 В МЕНЮ", callback_data="get_menu")])
     buttons.append([InlineKeyboardButton("🍕 ОФОРМИТЬ ЗАКАЗ",
                                          callback_data="check_out")])
@@ -67,6 +79,30 @@ def show_cart(update, context, headers):
                              text=text,
                              reply_markup=InlineKeyboardMarkup(buttons))
     context.user_data["total"] = int(total_price.replace(".", ""))
+
+
+def show_previous_page(update, context):
+    context.user_data["current_page"] -= 1
+    menu_markup = get_main_menu_markup(context.bot_data["moltin_token"],
+                                       context.user_data["current_page"])
+    delete_previous_message(context, update)
+    context.bot.send_message(
+        chat_id=update.callback_query.message.chat_id,
+        text="Пожалуйста, выберите товар:",
+        reply_markup=menu_markup
+    )
+
+
+def show_next_page(update, context):
+    context.user_data["current_page"] += 1
+    menu_markup = get_main_menu_markup(context.bot_data["moltin_token"],
+                                       context.user_data["current_page"])
+    delete_previous_message(context, update)
+    context.bot.send_message(
+        chat_id=update.callback_query.message.chat_id,
+        text="Пожалуйста, выберите товар:",
+        reply_markup=menu_markup
+    )
 
 
 def fetch_coordinates(apikey, address):
@@ -123,3 +159,10 @@ def send_message_after_delivery_time(context):
     context.bot.send_message(context.job.context,
                              text="Приятного аппетита!\n\n"
                                   "*что делать если пицца не пришла*")
+
+
+def delete_previous_message(context, update):
+    context.bot.delete_message(
+        chat_id=update.callback_query.message.chat_id,
+        message_id=update.callback_query.message.message_id
+    )

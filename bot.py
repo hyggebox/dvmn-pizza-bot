@@ -18,12 +18,14 @@ from telegram.ext import (CallbackContext,
                           MessageHandler,
                           Updater, PreCheckoutQueryHandler)
 
-from bot_helpers import (download_photo,
+from bot_helpers import (delete_previous_message,
+                         download_photo,
                          get_main_menu_markup,
                          show_cart,
                          fetch_coordinates,
                          get_nearest_pizzeria,
-                         send_message_after_delivery_time)
+                         send_message_after_delivery_time, show_next_page,
+                         show_previous_page)
 from moltin_handlers import (generate_moltin_token,
                              get_product_data,
                              add_product_to_cart,
@@ -56,23 +58,30 @@ class State(Enum):
     HANDLE_DELIVERY_METHOD = auto()
     HANDLE_PAYMENT = auto()
 
+
 def start(update: Update, context: CallbackContext):
     user = update.effective_user
+    context.user_data["current_page"] = 0
+    reply_markup = InlineKeyboardMarkup(
+        [[InlineKeyboardButton("Да, показать меню",
+                               callback_data="show_menu")]]
+    )
     update.message.reply_markdown_v2(
         text=f"Привет, {user.mention_markdown_v2()}\! Хотите заказать пиццу?",
-        reply_markup=get_main_menu_markup(context.bot_data["moltin_token"])
+        reply_markup=reply_markup
     )
-    return State.HANDLE_MENU
+    return State.SHOW_MENU
 
 
 def show_menu(update: Update, context: CallbackContext):
     user_query = update.callback_query
-    context.bot.delete_message(chat_id=user_query.message.chat_id,
-                               message_id=user_query.message.message_id)
+    delete_previous_message(context, update)
+    menu_markup = get_main_menu_markup(context.bot_data["moltin_token"],
+                                       context.user_data["current_page"])
     context.bot.send_message(
         chat_id=user_query.message.chat_id,
         text="Пожалуйста, выберите товар:",
-        reply_markup=get_main_menu_markup(context.bot_data["moltin_token"])
+        reply_markup=menu_markup
     )
     return State.HANDLE_MENU
 
@@ -80,14 +89,21 @@ def show_menu(update: Update, context: CallbackContext):
 def handle_menu(update: Update, context: CallbackContext):
     user_query = update.callback_query
     moltin_token = context.bot_data["moltin_token"]
-
+    if user_query["data"] == "next_page":
+        show_next_page(update, context)
+        return State.HANDLE_MENU
+    if user_query["data"] == "previous_page":
+        show_previous_page(update, context)
+        return State.HANDLE_MENU
     if user_query["data"] == "cart":
         show_cart(update, context, moltin_token)
         return State.HANDLE_CART
+    if user_query["data"] == "back":
+        show_menu(update, context)
+        return State.SHOW_MENU
 
     context.user_data["product_id"] = user_query.data
-    context.bot.delete_message(chat_id=user_query.message.chat_id,
-                               message_id=user_query.message.message_id)
+    delete_previous_message(context, update)
 
     product_data = get_product_data(moltin_token, user_query)
     product_img_id = product_data["relationships"]["main_image"]["data"]["id"]
@@ -123,7 +139,8 @@ def handle_description(update: Update, context: CallbackContext):
     moltin_token = context.bot_data["moltin_token"]
 
     if user_query["data"] == "back":
-        return State.SHOW_MENU
+        show_menu(update, context)
+        return State.HANDLE_MENU
     if user_query["data"] == "cart":
         show_cart(update, context, moltin_token)
         return State.HANDLE_CART
@@ -147,7 +164,8 @@ def handle_cart(update: Update, context: CallbackContext):
     moltin_token = context.bot_data["moltin_token"]
 
     if user_query["data"] == "get_menu":
-        return State.SHOW_MENU
+        show_menu(update, context)
+        return State.HANDLE_MENU
 
     elif user_query["data"] == "check_out":
         context.bot.send_message(chat_id=user_query.message.chat_id,
@@ -253,7 +271,7 @@ def handle_delivery_method(update: Update, context: CallbackContext):
 
     chat_id = update.effective_chat.id
     title = "Оплата заказа"
-    description = "Оплата заказа #000234"
+    description = "Оплата заказа #000000"
     payload = "PizzaPayment"
     provider_token = context.bot_data["merchant_token"]
     start_parameter = "test-payment"
