@@ -37,7 +37,6 @@ def download_photo(token, img_id):
 
 def get_main_menu_markup(token, current_page):
     all_products = get_all_products(token)
-
     products_per_page = 5
     products_groups = list(chunked(all_products, products_per_page))
     pages_num = len(products_groups)
