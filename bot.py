@@ -18,6 +18,7 @@ from telegram.ext import (CallbackContext,
                           MessageHandler,
                           Updater, PreCheckoutQueryHandler)
 
+
 from bot_helpers import (delete_previous_message,
                          download_photo,
                          get_main_menu_markup,
@@ -120,7 +121,6 @@ def handle_menu(update: Update, context: CallbackContext):
                     [InlineKeyboardButton("Назад", callback_data="back")]
                 ]
             )
-
             product_attrs = product_data["attributes"]
             product_price = find_product_price(moltin_token, product_attrs["sku"])
             caption_text = f"«{product_attrs['name']}»\n\n" \
@@ -213,7 +213,6 @@ def handle_location(update: Update, context: CallbackContext):
                 [InlineKeyboardButton("Самовывоз", callback_data="self_pickup")]
             ]
         )
-
         nearest_pizzeria = get_nearest_pizzeria(moltin_token, current_pos)
         distance_to_nearest_pizzeria = nearest_pizzeria["distance_to_user"]
         context.user_data["nearest_pizzeria"] = nearest_pizzeria
@@ -276,7 +275,6 @@ def handle_delivery_method(update: Update, context: CallbackContext):
     provider_token = context.bot_data["merchant_token"]
     start_parameter = "test-payment"
     currency = "RUB"
-
     prices = [LabeledPrice("Оплата пиццы", sum_in_rub * 100)]
 
     context.bot.send_invoice(chat_id, title, description,
@@ -318,7 +316,7 @@ def successful_payment_callback(update, context):
         context.bot.send_location(chat_id=carrier_id,
                                   latitude=users_lat,
                                   longitude=users_lon)
-        delivery_time_in_sec = 360
+        delivery_time_in_sec = 3600
         context.job_queue.run_once(send_message_after_delivery_time,
                                    delivery_time_in_sec,
                                    context=update.message.chat.id)
