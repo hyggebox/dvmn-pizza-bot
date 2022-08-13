@@ -81,4 +81,8 @@ pip install -r requirements.txt
 ```commandline
 python bot.py
 ```
- 
+
+## Пример реализации бота
+
+Демо реализации бота: [@HyggeboxPizzaBot](https://telegram.me/HyggeboxPizzaBot)  
+
