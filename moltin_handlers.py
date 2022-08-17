@@ -109,15 +109,8 @@ def create_flow(token, name, slug, description, is_enabled):
     return created_flow_id
 
 
-def create_flow_field(token, flow_slug, name, slug, field_type, description,
+def create_flow_field(token, flow_id, name, slug, field_type, description,
                       is_required, is_enabled):
-    if flow_slug == "pizzeria":
-        flow_id = "53d653bd-e23a-4505-a7f5-6318555e7878"
-    elif flow_slug == "customer-address":
-        flow_id = "064439c6-7a30-44d7-8ea0-5b3e50b0b4f5"
-    else:
-        raise ValueError(f"No flow with slug '{flow_slug}'")
-
     endpoint = "https://api.moltin.com/v2/fields"
     headers = {"Authorization": f"Bearer {token}"}
     body = {
