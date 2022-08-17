@@ -317,8 +317,7 @@ def successful_payment_callback(update, context):
     update.message.reply_text("Отлично! Мы уже готовим вашу пиццу!")
 
     if context.user_data["delivery_method"] == "delivery":
-        users_lat = context.user_data["customer_coors"][0]
-        users_lon = context.user_data["customer_coors"][1]
+        users_lat, users_lon = context.user_data["customer_coors"]
         create_entry(
             moltin_token,
             "customer-address",
