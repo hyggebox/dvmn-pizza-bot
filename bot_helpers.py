@@ -1,5 +1,6 @@
 import os
 import pathlib
+from textwrap import dedent
 from urllib.parse import urlsplit, unquote
 
 from geopy import distance
@@ -155,9 +156,12 @@ def get_nearest_pizzeria(token, users_coors):
 
 
 def send_message_after_delivery_time(context):
-    context.bot.send_message(context.job.context,
-                             text="Приятного аппетита!\n\n"
-                                  "*что делать если пицца не пришла*")
+    msg = """
+        Приятного аппетита!
+        
+        *что делать если пицца не пришла*
+    """
+    context.bot.send_message(context.job.context, text=dedent(msg))
 
 
 def delete_previous_message(context, update):

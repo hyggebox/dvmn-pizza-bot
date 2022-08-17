@@ -1,6 +1,7 @@
 import logging
 import os
 import pathlib
+from textwrap import dedent
 from enum import Enum, auto
 from time import sleep
 
@@ -123,13 +124,16 @@ def handle_menu(update: Update, context: CallbackContext):
             )
             product_attrs = product_data["attributes"]
             product_price = find_product_price(moltin_token, product_attrs["sku"])
-            caption_text = f"«{product_attrs['name']}»\n\n" \
-                           f"Цена: {product_price} руб.\n\n" \
-                           f"{product_attrs['description']}"[:1024]
+            caption_text = f"""
+                    {product_attrs['name']}
+            
+                    Цена: {product_price} руб.
 
+                    {product_attrs['description']}
+                """
             context.bot.send_photo(chat_id=user_query.message.chat_id,
                                    photo=image,
-                                   caption=caption_text,
+                                   caption=dedent(caption_text)[:1024],
                                    reply_markup=reply_markup)
             return State.HANDLE_DESCRIPTION
 
@@ -203,8 +207,7 @@ def handle_location(update: Update, context: CallbackContext):
 
     if not current_pos:
         update.message.reply_text(
-            "К сожалению, не могу найти координаты. "
-            "Уточните месторасположение"
+            "К сожалению, не могу найти координаты. Уточните месторасположение"
         )
     else:
         reply_markup = InlineKeyboardMarkup(
@@ -218,26 +221,36 @@ def handle_location(update: Update, context: CallbackContext):
         context.user_data["nearest_pizzeria"] = nearest_pizzeria
         context.user_data["customer_coors"] = current_pos
         if distance_to_nearest_pizzeria <= 0.5:
+            reply_msg = f"""
+                    Может, заберёте пиццу из нашей пиццерии неподалёку? 
+                    Она всего в {int(distance_to_nearest_pizzeria * 100)} м от вас!
+                    Вот её адрес: {nearest_pizzeria['address']}.
+                
+                    А можем и бесплатно доставить, нас не сложно с:
+                """
             update.message.reply_text(
-                text=f"Может, заберёте пиццу из нашей пиццерии "
-                     f"неподалёку? Она всего в "
-                     f"{int(distance_to_nearest_pizzeria * 100)} м от вас! "
-                     f"Вот её адрес: {nearest_pizzeria['address']}.\n\n "
-                     f"А можем и бесплатно доставить, нас не сложно с:",
+                text=dedent(reply_msg),
                 reply_markup=reply_markup
             )
         elif distance_to_nearest_pizzeria <= 5:
             delivery_price = 100
+            reply_msg = f"""
+                Адрес ближайшей пиццерии: {nearest_pizzeria['address']}.
+                
+                Похоже, придётся ехать до вас на самокате. Доставка будет стоить {delivery_price} руб.
+                Доставка или самовывоз?
+            """
             update.message.reply_text(
-                text=f"Адрес ближайшей пиццерии: {nearest_pizzeria['address']}.\n\n"
-                     f"Похоже, придётся ехать до вас на самокате."
-                     f"Доставка будет стоить {delivery_price} руб. "
-                     f"Доставка или самовывоз?",
+                text=dedent(reply_msg),
                 reply_markup=reply_markup
             )
             context.user_data["delivery_price"] = delivery_price
         elif distance_to_nearest_pizzeria <= 20:
             delivery_price = 300
+            reply_msg = f"""
+                Доставка пиццы до вас будет стоить {delivery_price} руб.
+                Оформляем заказ?
+            """
             update.message.reply_text(
                 text=f"Доставка пиццы до вас будет стоить "
                      f"{delivery_price} руб. Оформляем заказ?",
@@ -245,10 +258,11 @@ def handle_location(update: Update, context: CallbackContext):
             )
             context.user_data["delivery_price"] = delivery_price
         else:
-            update.message.reply_text(
-                f"Простите, но так далеко мы пиццу не доставим. "
-                f"Ближайшая пиццерия аж в {round(distance_to_nearest_pizzeria)} "
-                f"км от вас!")
+            reply_msg = f"""
+                Простите, но так далеко мы пиццу не доставим. 
+                Ближайшая пиццерия аж в {round(distance_to_nearest_pizzeria)} км от вас!"
+            """
+            update.message.reply_text(dedent(reply_msg))
 
         return State.HANDLE_DELIVERY_METHOD
 
