@@ -100,13 +100,13 @@ def main():
             create_entry(moltin_token, pizzeria_flow_slug, fields)
 
     if args.create_field:
-        flow_field_args = args.create_field
+        flow_id, field_name, field_slug, field_type, field_description = args.create_field
         create_flow_field(moltin_token,
-                          flow_field_args[0],
-                          flow_field_args[1],
-                          flow_field_args[2],
-                          flow_field_args[3],
-                          flow_field_args[4],
+                          flow_id,
+                          field_name,
+                          field_slug,
+                          field_type,
+                          field_description,
                           True, True)
 
 
